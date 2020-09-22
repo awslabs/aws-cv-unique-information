@@ -1,0 +1,8 @@
+{
+  "classifier": {
+    "net": "resnet18",
+    "pretrained": false,
+    "norm_layer": "GroupNorm",
+    "num_classes": 1
+  }
+}

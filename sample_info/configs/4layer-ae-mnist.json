@@ -1,0 +1,15 @@
+{
+  "encoder": [
+    {"type": "flatten"},
+    {"type": "fc", "dim": 512, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim": 512, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim": 512, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim":   2, "activation": "relu", "batch_norm": false}
+  ],
+  "decoder": [
+    {"type": "fc", "dim": 512, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim": 512, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim": 512, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim": 784, "activation": "sigmoid", "batch_norm": false}
+  ]
+}

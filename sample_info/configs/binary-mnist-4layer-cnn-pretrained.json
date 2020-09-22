@@ -1,0 +1,6 @@
+{
+  "classifier": {
+    "net": "emnist-letters-pretrained-cnn",
+    "num_classes": 1
+  }
+}

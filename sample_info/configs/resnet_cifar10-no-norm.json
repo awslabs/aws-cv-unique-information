@@ -1,0 +1,7 @@
+{
+  "classifier": {
+    "net": "resnet34-cifar",
+    "norm_layer": "none",
+    "num_classes": 10
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "classifier": [
+    {"type": "flatten"},
+    {"type": "fc", "dim": 8192, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim": 8192, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim": 8192, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim": 8192, "activation": "relu", "batch_norm": false},
+    {"type": "fc", "dim": 10}
+  ]
+}
