@@ -12,7 +12,7 @@
 # language governing permissions and limitations under the License.
 
 """
-TODO: write description and notes.
+Tools for estimating the effect of removing an example from a training dataset of linearized neural network. The unique information measures are bsaed on these tools.
 
 Remark1: eta here corresponds to the eta in math. Note that in math total loss = sum_i Loss_i + lamb * ||w - w_0||. In
 the codes however, the loss = 1/n * sum_i Loss_i + lamb' * ||w - w_0||.
@@ -111,7 +111,6 @@ def weight_stability(t, n, eta, init_params, jacobians, ntk, init_preds, Y, cont
                      l2_reg_coef=0.0, large_model_regime=False, model=None, dataset=None, return_change_vectors=True,
                      **kwargs):
     """
-    # TODO: fill the description of arguments
     :param without_sgd: if without_sgd = True, then only ||w1-w2|| will be returned,
                         otherwise (w1-w2)^T H Sigma^{-1} (w1-w2).
     """
