@@ -1,0 +1,7 @@
+{
+  "classifier": {
+    "net": "resnet18",
+    "pretrained": true,
+    "num_classes": 5
+  }
+}
