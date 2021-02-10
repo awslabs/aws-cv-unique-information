@@ -64,13 +64,13 @@ def hessian_vector_product(loss, params, v):
 
 @utils.with_no_grad
 def inverse_hvp_lissa(model, dataset, v, batch_size=128, scale=10,
-                      damping=0.0, num_samples=1, recursion_depth=1000):
+                      damping=0.0, num_samples=1, recursion_depth=1000, num_workers=0):
     """
     reference: https://github.com/kohpangwei/influence-release/blob/master/influence/genericNeuralNet.py#L475
     """
     model.eval()
     inverse_hvp = None
-    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
+    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
     for i in range(num_samples):
         cur_estimate = v.copy()
