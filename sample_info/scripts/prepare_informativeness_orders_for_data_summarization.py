@@ -63,6 +63,7 @@ def main():
     parser.add_argument('--cpu', dest='cpu', action='store_true')
     parser.set_defaults(cpu=False)
     parser.add_argument('--large_model_regime', dest='large_model_regime', action='store_true')
+    parser.add_argument('--random_subset_n_select', type=int, default=2000)
     parser.set_defaults(large_model_regime=False)
 
     args = parser.parse_args()

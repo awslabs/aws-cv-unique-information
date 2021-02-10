@@ -28,6 +28,7 @@ def main():
     parser.add_argument('--config', '-c', type=str, required=True)
     parser.add_argument('--device', '-d', default='cuda', help='specifies the main device')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--batch_size', '-b', type=int, default=256)
 
     # data parameters
     parser.add_argument('--dataset', '-D', type=str, default='mnist4vs9')
@@ -61,6 +62,7 @@ def main():
     parser.set_defaults(cpu=False)
     parser.add_argument('--large_model_regime', dest='large_model_regime', action='store_true')
     parser.set_defaults(large_model_regime=False)
+    parser.add_argument('--random_subset_n_select', type=int, default=2000)
     parser.add_argument('--return_change_vectors', dest='return_change_vectors', action='store_true')
     parser.set_defaults(return_change_vectors=False)
 
@@ -89,7 +91,8 @@ def main():
 
     # Prepare the needed terms
     ret = prepare_needed_items(model=model, train_data=train_data, test_data=val_data,
-                               projection=args.projection, cpu=args.cpu)
+                               projection=args.projection, cpu=args.cpu, batch_size=args.batch_size,
+                               random_subset_n_select=args.random_subset_n_select)
     n = len(train_data)
 
     exp_dir = os.path.join(args.output_dir, args.exp_name)
@@ -102,7 +105,8 @@ def main():
                                                l2_reg_coef=n * args.l2_reg_coef, continuous=False,
                                                without_sgd=False, model=model, dataset=train_data,
                                                large_model_regime=args.large_model_regime,
-                                               return_change_vectors=False)
+                                               return_change_vectors=False,
+                                               batch_size=args.batch_size)
 
         meta = {
             'description': f'weights (full) at epoch {args.t}',
@@ -121,7 +125,8 @@ def main():
                                                l2_reg_coef=n * args.l2_reg_coef, continuous=False,
                                                without_sgd=True, model=model, dataset=train_data,
                                                large_model_regime=args.large_model_regime,
-                                               return_change_vectors=args.return_change_vectors)
+                                               return_change_vectors=args.return_change_vectors,
+                                               batch_size=args.batch_size)
 
         meta = {
             'description': f'weights (plain) at epoch {args.t}',

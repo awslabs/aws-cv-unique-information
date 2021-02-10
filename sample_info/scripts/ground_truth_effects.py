@@ -38,10 +38,12 @@ def main():
     parser.add_argument('--vis_iter', '-v', type=int, default=2 ** 20)
     parser.add_argument('--log_dir', '-l', type=str, default='sample_info/logs/junk')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--num_accumulation_steps', default=1, type=int,
+                        help='Number of training steps to accumulate before updating weights')
 
     # data parameters
     parser.add_argument('--dataset', '-D', type=str, default='mnist4vs9',
-                        choices=['mnist4vs9', 'synthetic', 'cifar10-cat-vs-dog'],
+                        choices=['mnist4vs9', 'synthetic', 'cifar10-cat-vs-dog', 'cats-and-dogs'],
                         help='Which dataset to use. One can add more choices if needed.')
     parser.add_argument('--data_augmentation', '-A', action='store_true', dest='data_augmentation')
     parser.set_defaults(data_augmentation=False)
@@ -61,7 +63,7 @@ def main():
     parser.set_defaults(linearized=False)
 
     parser.add_argument('--l2_reg_coef', type=float, default=0.0)
-    parser.add_argument('--lr', type=float, default=1e-2, help='Learning rate')
+    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--optimizer', type=str, default='sgd', choices=['adam', 'sgd'])
 
     parser.add_argument('--output_dir', '-o', type=str, default='sample_info/results/ground-truth/ground-truth/')
@@ -81,7 +83,7 @@ def main():
         val_data = CacheDatasetWrapper(val_data)
         test_data = CacheDatasetWrapper(test_data)
 
-    shuffle_train = (args.batch_size < len(train_data))
+    shuffle_train = (args.batch_size * args.num_accumulation_steps < len(train_data))
     train_loader, val_loader, test_loader = get_loaders_from_datasets(train_data, val_data, test_data,
                                                                       batch_size=args.batch_size,
                                                                       num_workers=args.num_workers,
@@ -132,13 +134,14 @@ def main():
                    log_dir=args.log_dir,
                    args_to_log=args,
                    metrics=metrics_list,
-                   device_ids=args.all_device_ids)
+                   device_ids=args.all_device_ids,
+                   num_accumulation_steps=args.num_accumulation_steps)
 
     params = dict(model.named_parameters())
     for k in params.keys():
         params[k] = utils.to_cpu(params[k])
     val_preds = utils.apply_on_dataset(model=model, dataset=val_data, cpu=True,
-                                       partition='val', batch_size=2**30)['pred']
+                                       partition='val', batch_size=args.batch_size)['pred']
     val_acc = metrics_list[0].value(epoch=args.epochs, partition='val')
 
     exp_dir = os.path.join(args.output_dir, args.exp_name)

@@ -37,6 +37,8 @@ def main():
     parser.add_argument('--save_iter', '-s', type=int, default=2**30)
     parser.add_argument('--vis_iter', '-v', type=int, default=2**30)
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--num_accumulation_steps', default=1, type=int,
+                        help='Number of training steps to accumulate before updating weights')
 
     # data parameters
     parser.add_argument('--dataset', '-D', type=str, default='mnist')
@@ -106,9 +108,11 @@ def main():
         val_data = CacheDatasetWrapper(val_data)
         test_data = CacheDatasetWrapper(test_data)
 
+    shuffle_train = (args.batch_size * args.num_accumulation_steps < len(train_data))
     train_loader, val_loader, test_loader = get_loaders_from_datasets(train_data, val_data, test_data,
                                                                       batch_size=args.batch_size,
-                                                                      num_workers=args.num_workers)
+                                                                      num_workers=args.num_workers,
+                                                                      shuffle_train=shuffle_train)
 
     # Options
     optimization_args = {
@@ -129,7 +133,11 @@ def main():
                         device=args.device,
                         seed=args.seed)
 
-    metrics_list = [metrics.Accuracy(output_key='pred')]
+    # put the model in always eval mode. This makes sure that in case the network has pretrained BatchNorm
+    # layers, their running average is fixed.
+    utils.put_always_eval_mode(model)
+
+    metrics_list = [metrics.Accuracy(output_key='pred', one_hot=(train_data[0][1].ndim > 0))]
     if args.dataset == 'imagenet':
         metrics_list.append(metrics.TopKAccuracy(k=5, output_key='pred'))
 
@@ -147,7 +155,8 @@ def main():
                    args_to_log=args,
                    stopper=stopper,
                    metrics=metrics_list,
-                   device_ids=args.all_device_ids)
+                   device_ids=args.all_device_ids,
+                   num_accumulation_steps=args.num_accumulation_steps)
 
     val_preds = utils.apply_on_dataset(model=model, dataset=val_data, cpu=True,
                                        partition='val', batch_size=args.batch_size)['pred']
