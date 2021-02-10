@@ -12,6 +12,7 @@
 # language governing permissions and limitations under the License.
 
 import copy
+import logging
 
 import numpy as np
 import torch.utils.data
@@ -228,7 +229,7 @@ class CacheDatasetWrapper(torch.utils.data.Dataset):
         self.statistics = dataset.statistics
 
         # create cache
-        print(f"Caching dataset {dataset.dataset_name}. Assuming data augmentation is disabled.")
+        logging.warning(f"Caching dataset {dataset.dataset_name}. Assuming data augmentation is disabled.")
         self._cached_dataset = [p for p in dataset]
 
     def __len__(self):
@@ -321,7 +322,7 @@ class UniformNoiseWrapper(torch.utils.data.Dataset):
         return x, self.ys[idx]
 
 
-def get_synthetic_data(seed=42):
+def get_synthetic_data(seed=42, extra_dim=100, num_examples=600):
     np.random.seed(seed)
     mu_1 = np.array([0.0, 1.0])
     mu_2 = np.array([1.0, 0.0])
@@ -338,9 +339,8 @@ def get_synthetic_data(seed=42):
     ])
 
     np.random.seed(seed)
-    A = np.random.multivariate_normal(mu_1, cov_1, size=(600,))
-    B = np.random.multivariate_normal(mu_2, cov_2, size=(600,))
-    extra_dim = 100
+    A = np.random.multivariate_normal(mu_1, cov_1, size=(num_examples,))
+    B = np.random.multivariate_normal(mu_2, cov_2, size=(num_examples,))
     if extra_dim > 0:
         A_extra = np.random.randn(A.shape[0], extra_dim)
         B_extra = np.random.randn(B.shape[0], extra_dim)
@@ -352,7 +352,15 @@ def get_synthetic_data(seed=42):
     shuffle_order = np.random.permutation(data_X.shape[0])
     data_X = data_X[shuffle_order]
     data_Y = data_Y[shuffle_order]
-    return data_X, data_Y
+
+    info = {
+        'mu_1': mu_1,
+        'mu_2': mu_2,
+        'cov_1': cov_1,
+        'cov_2': cov_2
+    }
+
+    return data_X, data_Y, info
 
 
 class DataSelector(nnlib.nnlib.data_utils.base.DataSelector):
@@ -452,9 +460,87 @@ class DataSelector(nnlib.nnlib.data_utils.base.DataSelector):
 
         return train_loader, val_loader, test_loader, info
 
+    # NOTE: here we override the nnlib's parser of cats-and-dogs
+    @nnlib.nnlib.data_utils.base.register_parser(_parsers, 'cats-and-dogs')
+    def _parse_cats_and_dogs(self, args, build_loaders=True):
+        args = copy.deepcopy(args)
+        num_train_examples = args.pop('num_train_examples', None)
+
+        from nnlib.nnlib.data_utils.cats_and_dogs import CatsAndDogs
+        data_builder = CatsAndDogs(**args)
+
+        train_data, val_data, test_data, info = data_builder.build_datasets(**args)
+
+        # trim down validation and training sets to num_train_examples
+        if num_train_examples is not None:
+            np.random.seed(args.get('seed', 42))
+            if len(train_data) > num_train_examples:
+                train_indices = np.random.choice(len(train_data), size=num_train_examples, replace=False)
+                train_data = SubsetDataWrapper(train_data, include_indices=train_indices)
+
+            if len(val_data) > num_train_examples:
+                val_indices = np.random.choice(len(val_data), size=num_train_examples, replace=False)
+                val_data = SubsetDataWrapper(val_data, include_indices=val_indices)
+
+        # set testing equal to validation set, because there is no test set
+        test_data = val_data
+
+        # add label noise
+        seed = args.get('seed', 42)
+        error_prob = args.get('error_prob', 0.0)
+        if error_prob > 0.0:
+            train_data = UniformNoiseWrapper(train_data, error_prob=error_prob, num_classes=2, seed=seed)
+            info = train_data.is_corrupted
+            clean_validation = args.get('clean_validation', True)
+            if not clean_validation:
+                val_data = UniformNoiseWrapper(val_data, error_prob=error_prob, num_classes=2, seed=seed)
+
+        if not build_loaders:
+            return train_data, val_data, test_data, info
+
+        train_loader, val_loader, test_loader = nnlib.nnlib.data_utils.base.get_loaders_from_datasets(
+            train_data=train_data, val_data=val_data, test_data=test_data, **args)
+
+        return train_loader, val_loader, test_loader, info
+
+    # NOTE: here we override the nnlib's parser of cassava
+    @nnlib.nnlib.data_utils.base.register_parser(_parsers, 'cassava')
+    def _parse_cassava(self, args, build_loaders=True):
+        args = copy.deepcopy(args)
+
+        from nnlib.nnlib.data_utils.cassava import Cassava
+        data_builder = Cassava(**args)
+
+        train_data, val_data, test_data, info = data_builder.build_datasets(**args)
+
+        # add label noise
+        seed = args.get('seed', 42)
+        error_prob = args.get('error_prob', 0.0)
+        if error_prob > 0.0:
+            train_data = UniformNoiseWrapper(train_data, error_prob=error_prob, num_classes=5, seed=seed)
+            info = train_data.is_corrupted
+            clean_validation = args.get('clean_validation', True)
+            if not clean_validation:
+                val_data = UniformNoiseWrapper(val_data, error_prob=error_prob, num_classes=5, seed=seed)
+
+        train_data = OneHotLabelWrapper(train_data, num_classes=5)
+        val_data = OneHotLabelWrapper(val_data, num_classes=5)
+        test_data = OneHotLabelWrapper(test_data, num_classes=5)
+
+        if not build_loaders:
+            return train_data, val_data, test_data, info
+
+        train_loader, val_loader, test_loader = nnlib.nnlib.data_utils.base.get_loaders_from_datasets(
+            train_data=train_data, val_data=val_data, test_data=test_data, **args)
+
+        return train_loader, val_loader, test_loader, info
+
     @nnlib.nnlib.data_utils.base.register_parser(_parsers, 'synthetic')
     def _parse_synthetic(self, args, build_loaders=True):
-        data_X, data_Y = get_synthetic_data(args['seed'])
+        extra_dim = args.get('extra_dim', 100)
+        num_examples = args.get('num_examples', 600)
+        data_X, data_Y, info = get_synthetic_data(args['seed'], extra_dim=extra_dim,
+                                                  num_examples=num_examples)
         half = len(data_X) // 2
         train_data = torch.utils.data.TensorDataset(torch.tensor(data_X[:half]).float(),
                                                     torch.tensor(data_Y[:half]).long().reshape((-1, 1)))
@@ -468,12 +554,12 @@ class DataSelector(nnlib.nnlib.data_utils.base.DataSelector):
         val_data.statistics = None
 
         if not build_loaders:
-            return train_data, val_data, test_data, None
+            return train_data, val_data, test_data, info
 
         train_loader, val_loader, test_loader = nnlib.nnlib.data_utils.base.get_loaders_from_datasets(
             train_data=train_data, val_data=val_data, test_data=test_data, **args)
 
-        return train_loader, val_loader, test_loader, None
+        return train_loader, val_loader, test_loader, info
 
     @nnlib.nnlib.data_utils.base.register_parser(_parsers, 'nike')
     def _parse_nike(self, args, build_loaders=True):

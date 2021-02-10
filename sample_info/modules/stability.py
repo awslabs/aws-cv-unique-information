@@ -11,6 +11,13 @@
 # ANY KIND, either express or implied. See the License for the specific
 # language governing permissions and limitations under the License.
 
+"""
+TODO: write description and notes.
+
+Remark1: eta here corresponds to the eta in math. Note that in math total loss = sum_i Loss_i + lamb * ||w - w_0||. In
+the codes however, the loss = 1/n * sum_i Loss_i + lamb' * ||w - w_0||.
+Therefore, we want lamb' = lamb * n and eta' (in math) = 1/n * eta.
+"""
 from scipy.linalg import solve_continuous_lyapunov
 from tqdm import tqdm
 from torch.utils.data import Subset

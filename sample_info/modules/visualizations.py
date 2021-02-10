@@ -14,20 +14,36 @@
 import numpy as np
 import torch
 
+from sklearn.neighbors import KernelDensity
+
 from nnlib.nnlib import utils
 from nnlib.nnlib.data_utils.base import revert_normalization
 from nnlib.nnlib.matplotlib_utils import import_matplotlib
-from nnlib.nnlib.visualizations import get_image, savefig
+from nnlib.nnlib.visualizations import get_image, savefig, plot_examples_from_dataset
+
+
+def convert_scores_to_numpy(scores):
+    if isinstance(scores, list) and isinstance(scores[0], torch.Tensor):
+        return utils.to_numpy(torch.stack(scores).flatten())
+    if isinstance(scores, torch.Tensor):
+        return utils.to_numpy(scores.flatten())
+    if isinstance(scores, np.ndarray):
+        return scores.flatten()
+    raise ValueError("Cannot convert scores to a numpy array.")
 
 
 def plot_histogram_of_informativeness(informativeness_scores, groups=None, bins=50, plt=None, save_name=None,
-                                      density=False, **kwargs):
+                                      density=False, use_density_estimation=False, bandwidth=0.0002, **kwargs):
     """
-    :param informativeness_scores: np.ndarray of informativeness scores
     :param groups: list of strings describing the group of each sample
     """
     if plt is None:
         _, plt = import_matplotlib(agg=True, use_style=False)
+
+    informativeness_scores = convert_scores_to_numpy(informativeness_scores)
+
+    if use_density_estimation:
+        density = True
 
     with_groups = True
     if groups is None:
@@ -38,9 +54,17 @@ def plot_histogram_of_informativeness(informativeness_scores, groups=None, bins=
     groups = np.array(groups)
 
     fig, ax = plt.subplots(figsize=(7, 5))
-    for g in different_groups:
-        _, bins, _ = ax.hist(informativeness_scores[groups == g], bins=bins, alpha=0.5, label=g,
-                             density=density)
+    if not use_density_estimation:
+        for g in different_groups:
+            _, bins, _ = ax.hist(informativeness_scores[groups == g], bins=bins, alpha=0.5,
+                                 label=g, density=density)
+    else:
+        for g in different_groups:
+            scores = informativeness_scores[groups == g]
+            kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth).fit(scores.reshape((-1, 1)))
+            xs = np.linspace(0.000, np.max(informativeness_scores), 1000)
+            prob_density = np.exp(kde.score_samples(xs.reshape((-1, 1))))
+            ax.plot(xs, prob_density, label=g)
 
     ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0))
     ax.set_xlabel('Informativeness of an example')
@@ -59,19 +83,40 @@ def plot_histogram_of_informativeness(informativeness_scores, groups=None, bins=
     return fig, ax
 
 
-def plot_summary_of_informativeness(train_data, informativeness_scores, label_names=None, save_name=None, plt=None,
-                                    is_label_one_hot=False):
+def plot_least_or_most_informative_examples(data, informativeness_scores, plt=None, save_name=None,
+                                            least_informative=False, n_examples=10, **kwargs):
+    if plt is None:
+        _, plt = import_matplotlib(agg=True, use_style=False)
+
+    informativeness_scores = convert_scores_to_numpy(informativeness_scores)
+
+    order = np.argsort(informativeness_scores)
+    if least_informative:
+        indices = order[:n_examples]
+    else:
+        indices = order[-n_examples:]
+
+    fig, ax = plot_examples_from_dataset(data=data, indices=indices, n_rows=1, n_cols=n_examples,
+                                         savename=save_name, plt=plt, **kwargs)
+
+    return fig, ax
+
+
+def plot_summary_of_informativeness(data, informativeness_scores, label_names=None, save_name=None,
+                                    plt=None, is_label_one_hot=False, **kwargs):
     """
     :param informativeness_scores: np.ndarray of informativeness scores
     """
     if plt is None:
         _, plt = import_matplotlib(agg=True, use_style=False)
 
+    informativeness_scores = convert_scores_to_numpy(informativeness_scores)
+
     fig = plt.figure(constrained_layout=True, figsize=(24, 5))
     gs = fig.add_gridspec(22, 13)
     ax_left = fig.add_subplot(gs[1:22, :3])
 
-    ys = [torch.tensor(y) for x, y in train_data]
+    ys = [torch.tensor(y) for x, y in data]
     if is_label_one_hot:
         ys = [torch.argmax(y) for y in ys]
     ys = np.array([y.item() for y in ys])
@@ -104,8 +149,8 @@ def plot_summary_of_informativeness(train_data, informativeness_scores, label_na
             y_pos = ax.get_position().y1
             fig.text(x_pos - 0.05, y_pos + 0.065, 'B', size=28, weight='bold')
 
-        x, y = train_data[least_informative[i]]
-        x = revert_normalization(x, train_data)[0]
+        x, y = data[least_informative[i]]
+        x = revert_normalization(x, data)[0]
         x = utils.to_numpy(x)
         x = get_image(x)
         ax.imshow(x, vmin=0, vmax=1)
@@ -118,8 +163,8 @@ def plot_summary_of_informativeness(train_data, informativeness_scores, label_na
             y_pos = ax.get_position().y1
             fig.text(x_pos - 0.05, y_pos + 0.042, 'C', size=28, weight='bold')
 
-        x, y = train_data[most_informative[i]]
-        x = revert_normalization(x, train_data)[0]
+        x, y = data[most_informative[i]]
+        x = revert_normalization(x, data)[0]
         x = utils.to_numpy(x)
         x = get_image(x)
         ax.imshow(x, vmin=0, vmax=1)
