@@ -26,6 +26,7 @@ from sample_info.modules.misc import process_results
 from sample_info.modules.influence_functions import inverse_hvp_lissa
 from sample_info.modules.ntk import JacobianEstimator
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', type=str, required=True)
@@ -36,7 +37,7 @@ def main():
 
     # data parameters
     parser.add_argument('--dataset', '-D', type=str, default='mnist4vs9',
-                        choices=['mnist4vs9', 'synthetic', 'cifar10-cat-vs-dog'],
+                        choices=['mnist4vs9', 'synthetic', 'cifar10-cat-vs-dog', 'cats-and-dogs'],
                         help='Which dataset to use. One can add more choices if needed.')
     parser.add_argument('--data_augmentation', '-A', action='store_true', dest='data_augmentation')
     parser.set_defaults(data_augmentation=False)

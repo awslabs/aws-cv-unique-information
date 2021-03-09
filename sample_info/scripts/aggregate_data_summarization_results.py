@@ -118,7 +118,7 @@ def main():
         read_proposed(results, args, 'weights-plain-iterative')
 
     # plot
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(7, 5))
 
     if 'random' in results:
         cur_results = results.pop('random')

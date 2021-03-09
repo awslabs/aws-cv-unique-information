@@ -11,7 +11,16 @@
 # ANY KIND, either express or implied. See the License for the specific
 # language governing permissions and limitations under the License.
 
+"""
+TODO: write description and notes.
+
+Remark1: eta here corresponds to the eta in math. Note that in math total loss = sum_i Loss_i + lamb * ||w - w_0||. In
+the codes however, the loss = 1/n * sum_i Loss_i + lamb' * ||w - w_0||.
+Therefore, we want lamb' = lamb * n and eta' (in math) = 1/n * eta.
+"""
 from collections import defaultdict
+import logging
+logging.basicConfig(level=logging.INFO)
 
 from tqdm import tqdm
 from torch.utils.data import Subset, DataLoader
@@ -23,7 +32,7 @@ from nnlib.nnlib import utils
 
 
 class JacobianEstimator:
-    def __init__(self, projection='none', random_subset_n_select=2000, very_sparse_count=10000):
+    def __init__(self, projection='none', random_subset_n_select=2000, very_sparse_count=10000, **kwargs):
         if projection not in ['none', 'random-subset', 'very-sparse']:
             raise ValueError(f"Projection '{projection}' is not implemented.")
         self.projection = projection
@@ -340,7 +349,8 @@ def get_weights_at_time_t(t, eta, init_params, ntk, init_preds, Y, jacobians=Non
     return out
 
 
-def prepare_needed_items(model, train_data, test_data=None, projection='none', cpu=False, **kwargs):
+def prepare_needed_items(model, train_data, test_data=None, projection='none', cpu=False,
+                         batch_size=256, **kwargs):
     jacobian_estimator = JacobianEstimator(projection=projection, **kwargs)
     train_jacobians = jacobian_estimator.compute_jacobian(model=model, dataset=train_data,
                                                           output_key='pred', cpu=cpu)
@@ -349,10 +359,12 @@ def prepare_needed_items(model, train_data, test_data=None, projection='none', c
         test_jacobians = jacobian_estimator.compute_jacobian(model=model, dataset=test_data,
                                                              output_key='pred', cpu=cpu)
 
-    train_init_preds = utils.apply_on_dataset(model=model, dataset=train_data, cpu=cpu)['pred']
+    train_init_preds = utils.apply_on_dataset(model=model, dataset=train_data, cpu=cpu,
+                                              batch_size=batch_size)['pred']
     test_init_preds = None
     if test_data is not None:
-        test_init_preds = utils.apply_on_dataset(model=model, dataset=test_data, cpu=cpu)['pred']
+        test_init_preds = utils.apply_on_dataset(model=model, dataset=test_data, cpu=cpu,
+                                                 batch_size=batch_size)['pred']
 
     init_params = dict(model.named_parameters())
     if cpu:
@@ -360,6 +372,13 @@ def prepare_needed_items(model, train_data, test_data=None, projection='none', c
             init_params[k] = v.to('cpu')
 
     ntk = compute_ntk(jacobians=train_jacobians)
+    lamb, _ = torch.eig(ntk)
+    lamb = lamb[:, 0]
+    logging.info(f'Min eigenvalue of NTK: {torch.min(lamb).item():.3f}\t'
+                 f'Max eigenvalue of NTK: {torch.max(lamb).item():.3f}')
+    if torch.min(lamb).item() < 0:
+        logging.warning('The lowest eigenvalue of NTK is negative, consider adding at least small weight decay.')
+
     test_train_ntk = None
     if test_data is not None:
         test_train_ntk = compute_test_train_ntk(train_jacobians=train_jacobians,
